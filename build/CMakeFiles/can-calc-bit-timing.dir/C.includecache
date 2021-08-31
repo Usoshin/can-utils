@@ -1,0 +1,34 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+../include/linux/can/netlink.h
+linux/types.h
+-
+
+/home/nikita/can-utils/can-calc-bit-timing.c
+errno.h
+-
+getopt.h
+-
+limits.h
+-
+stdbool.h
+-
+stdint.h
+-
+stdio.h
+-
+stdlib.h
+-
+string.h
+-
+linux/types.h
+-
+linux/can/netlink.h
+-
+

@@ -1,0 +1,28 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+../include/linux/can.h
+linux/types.h
+-
+linux/socket.h
+-
+
+/home/nikita/can-utils/lib.h
+stdio.h
+-
+
+/home/nikita/can-utils/log2long.c
+stdio.h
+-
+net/if.h
+-
+linux/can.h
+-
+lib.h
+/home/nikita/can-utils/lib.h
+

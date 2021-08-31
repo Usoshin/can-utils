@@ -1,0 +1,1 @@
+/usr/bin/cc  -Wall -Wno-parentheses -fno-strict-aliasing -DSO_RXQ_OVFL=40 -DPF_CAN=29 -DAF_CAN=PF_CAN -DN_SLCAN=17 -DSCM_TIMESTAMPING_OPT_STATS=54 -O3 -DNDEBUG -rdynamic CMakeFiles/canlogserver.dir/canlogserver.c.o -o canlogserver  libcan.a 

@@ -1,0 +1,2 @@
+/usr/bin/ar qc libcan.a CMakeFiles/can.dir/lib.c.o CMakeFiles/can.dir/canframelen.c.o
+/usr/bin/ranlib libcan.a

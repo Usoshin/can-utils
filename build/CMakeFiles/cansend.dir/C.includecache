@@ -1,0 +1,44 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+../include/linux/can.h
+linux/types.h
+-
+linux/socket.h
+-
+
+../include/linux/can/raw.h
+linux/can.h
+-
+
+/home/nikita/can-utils/cansend.c
+stdio.h
+-
+stdlib.h
+-
+string.h
+-
+unistd.h
+-
+net/if.h
+-
+sys/ioctl.h
+-
+sys/socket.h
+-
+linux/can.h
+-
+linux/can/raw.h
+-
+lib.h
+/home/nikita/can-utils/lib.h
+
+/home/nikita/can-utils/lib.h
+stdio.h
+-
+
