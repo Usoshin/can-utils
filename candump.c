@@ -228,7 +228,7 @@ int openlogfile(FILE **logfile) {
 	localtime_r(&currtime, &now);
 
 	if (fname[0] == 0) {
-		sprintf(fname, "candump-%04d-%02d-%02d_%02d%02d%02d.log", now.tm_year + 1900,
+		sprintf(fname, "candump-%04d-%02d-%02d_%02d%02d%02d.trc", now.tm_year + 1900,
 			now.tm_mon + 1, now.tm_mday, now.tm_hour, now.tm_min, now.tm_sec);
 
 		fprintf(stderr, "Enabling Logfile '%s'\n", fname);
@@ -240,6 +240,7 @@ int openlogfile(FILE **logfile) {
 		return 1;
 	}
 	*logfile = tmpfile;
+	fprintf(tmpfile, ";$FILEVERSION=2.0 \n;$STARTTIME= %d \n", now.tm_sec);
 
 	return 0;
 }
@@ -285,6 +286,7 @@ int main(int argc, char **argv)
 	unsigned char logfrmt = 0;
 	unsigned long logmax = 0;
 	unsigned char part = 0;
+	int numberRow = 1;
 	int count = 0;
 	int rcvbuf_size = 0;
 	int opt, ret;
@@ -800,15 +802,26 @@ int main(int argc, char **argv)
 
 				if (log) {
 					char buf[CL_CFSZ]; /* max length */
-					char line[CL_CFSZ + max_devname_len + 22];
+					char line[50 + max_devname_len + 22];
+					
 
 					/* log CAN frame with absolute timestamp & device */
 					sprint_canframe(buf, &frame, 0, maxdlen);
-					int n = sprintf(line, "(%010ld.%06ld) %*s %s\n",
-						tv.tv_sec, tv.tv_usec,
-						max_devname_len, devname[idx], buf);
+					int n = sprintf(line, "%8d     (%010ld)     %s %s \n", numberRow, 
+						tv.tv_sec, 
+						devname[idx], buf);
+						// sprintf(line, "%d \n",max_devname_len);
+					// int n = sprintf(line, "(%010ld.%06ld) %*s %s\n",
+					// 	tv.tv_sec, tv.tv_usec,
+					// 	max_devname_len, devname[idx], buf);
+					// int i;
+					// for (i = 0; i < MAXSOCK; i++)
+					// {
+					// 	printf(" Int: %s \n", devname[i]);
+					// }
 					if (logmax && ftell(logfile) + n > logmax) {
 						fclose(logfile);
+						numberRow = 1;
 						char postfix[7] = { 0 };
 						char fullfname[sizeof(fname) + sizeof(postfix)];
 						sprintf(postfix, ".pt%u", part);
@@ -820,6 +833,7 @@ int main(int argc, char **argv)
 							return 1;
 					}
 					fprintf(logfile, "%s", line);
+					numberRow++;
 				}
 
 				if ((logfrmt) && (silent == SILENT_OFF)){

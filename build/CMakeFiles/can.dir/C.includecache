@@ -14,26 +14,6 @@ linux/socket.h
 
 ../include/linux/can/error.h
 
-/home/nikita/can-utils/canframelen.c
-canframelen.h
-/home/nikita/can-utils/canframelen.h
-stdint.h
--
-stddef.h
--
-stdbool.h
--
-string.h
--
-assert.h
--
-arpa/inet.h
--
-
-/home/nikita/can-utils/canframelen.h
-linux/can.h
--
-
 /home/nikita/can-utils/lib.c
 stdio.h
 -

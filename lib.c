@@ -254,15 +254,15 @@ void sprint_canframe(char *buf , struct canfd_frame *cf, int sep, int maxdlen) {
 
 	if (cf->can_id & CAN_ERR_FLAG) {
 		put_eff_id(buf, cf->can_id & (CAN_ERR_MASK|CAN_ERR_FLAG));
-		buf[8] = '#';
+		buf[8] = ' ';
 		offset = 9;
 	} else if (cf->can_id & CAN_EFF_FLAG) {
 		put_eff_id(buf, cf->can_id & CAN_EFF_MASK);
-		buf[8] = '#';
+		buf[8] = ' ';
 		offset = 9;
 	} else {
 		put_sff_id(buf, cf->can_id & CAN_SFF_MASK);
-		buf[3] = '#';
+		buf[3] = ' ';
 		offset = 4;
 	}
 
