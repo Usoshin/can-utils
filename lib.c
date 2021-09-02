@@ -60,12 +60,17 @@ const char hex_asc_upper[] = "0123456789ABCDEF";
 #define hex_asc_upper_lo(x)	hex_asc_upper[((x) & 0x0F)]
 #define hex_asc_upper_hi(x)	hex_asc_upper[((x) & 0xF0) >> 4]
 
+static inline void put1_hex_byte(char *buf, __u8 byte)
+{
+	buf[0] = ' ';
+	buf[1] = hex_asc_upper_hi(byte);
+	buf[2] = hex_asc_upper_lo(byte);
+}
 static inline void put_hex_byte(char *buf, __u8 byte)
 {
 	buf[0] = hex_asc_upper_hi(byte);
 	buf[1] = hex_asc_upper_lo(byte);
 }
-
 static inline void _put_id(char *buf, int end_offset, canid_t id)
 {
 	/* build 3 (SFF) or 8 (EFF) digit CAN identifier */
@@ -76,7 +81,9 @@ static inline void _put_id(char *buf, int end_offset, canid_t id)
 }
 
 #define put_sff_id(buf, id) _put_id(buf, 2, id)
+// #define put1_sff_id(buf, id) _put1_id(buf, 2, id)//short
 #define put_eff_id(buf, id) _put_id(buf, 7, id)
+// #define put1_eff_id(buf, id) _put1_id(buf, 7, id)//long
 
 /* CAN DLC to real data length conversion helpers */
 
@@ -246,26 +253,81 @@ void fprint_canframe(FILE *stream , struct canfd_frame *cf, char *eol, int sep, 
 		fprintf(stream, "%s", eol);
 }
 
-void sprint_canframe(char *buf , struct canfd_frame *cf, int sep, int maxdlen) {
+void sprint1_canframe(char *buf ,char *ID,char *DATA, struct canfd_frame *cf, int sep, int maxdlen) {
 	/* documentation see lib.h */
 
-	int i,offset;
+	int i,offset,off = 0;
 	int len = (cf->len > maxdlen) ? maxdlen : cf->len;
 
 	if (cf->can_id & CAN_ERR_FLAG) {
 		put_eff_id(buf, cf->can_id & (CAN_ERR_MASK|CAN_ERR_FLAG));
-		buf[8] = ' ';
+		put_eff_id(ID, cf->can_id & (CAN_ERR_MASK|CAN_ERR_FLAG));
+		buf[8] = '#';
+		offset = 9;
+		ID[8] = 0;
+	} else if (cf->can_id & CAN_EFF_FLAG) {
+		put_eff_id(buf, cf->can_id & CAN_EFF_MASK);
+		put_eff_id(ID, cf->can_id & CAN_EFF_MASK);
+		buf[8] = '#';
+		offset = 9;
+		ID[8] = 0;
+	} else {
+		put_sff_id(buf, cf->can_id & CAN_SFF_MASK);
+		put_sff_id(ID, cf->can_id & CAN_SFF_MASK);
+		buf[3] = '#';
+		offset = 4;
+		ID[3] = 0;
+	}
+	/* standard CAN frames may have RTR enabled. There are no ERR frames with RTR */
+	if (maxdlen == CAN_MAX_DLEN && cf->can_id & CAN_RTR_FLAG) {
+		buf[offset++] = 'R';
+		/* print a given CAN 2.0B DLC if it's not zero */
+		if (cf->len && cf->len <= CAN_MAX_DLC)
+			buf[offset++] = hex_asc_upper_lo(cf->len);
+
+		buf[offset] = 0;
+		return;
+	}
+
+	if (maxdlen == CANFD_MAX_DLEN) {
+		/* add CAN FD specific escape char and flags */
+		buf[offset++] = '#';
+		buf[offset++] = hex_asc_upper_lo(cf->flags);
+		if (sep && len)
+			buf[offset++] = '.';
+	}
+
+	for (i = 0; i < len; i++) {
+		put_hex_byte(buf + offset, cf->data[i]);
+		put1_hex_byte(DATA + off, cf->data[i]);
+		offset += 2;
+		off += 3;
+		if (sep && (i+1 < len))
+			buf[offset++] = '.';
+	}
+	DATA[off] = 0;
+	buf[offset] = 0;
+}
+
+void sprint_canframe(char *buf , struct canfd_frame *cf, int sep, int maxdlen) {
+	/* documentation see lib.h */
+
+	int i,offset,off = 0;
+	int len = (cf->len > maxdlen) ? maxdlen : cf->len;
+
+	if (cf->can_id & CAN_ERR_FLAG) {
+		put_eff_id(buf, cf->can_id & (CAN_ERR_MASK|CAN_ERR_FLAG));
+		buf[8] = '#';
 		offset = 9;
 	} else if (cf->can_id & CAN_EFF_FLAG) {
 		put_eff_id(buf, cf->can_id & CAN_EFF_MASK);
-		buf[8] = ' ';
+		buf[8] = '#';
 		offset = 9;
 	} else {
 		put_sff_id(buf, cf->can_id & CAN_SFF_MASK);
-		buf[3] = ' ';
+		buf[3] = '#';
 		offset = 4;
 	}
-
 	/* standard CAN frames may have RTR enabled. There are no ERR frames with RTR */
 	if (maxdlen == CAN_MAX_DLEN && cf->can_id & CAN_RTR_FLAG) {
 		buf[offset++] = 'R';

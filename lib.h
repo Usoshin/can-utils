@@ -52,6 +52,7 @@
 #define CL_ID (sizeof("12345678##1"))
 #define CL_DATA sizeof(".AA")
 #define CL_BINDATA sizeof(".10101010")
+#define CL_PROB sizeof(" ")
 
  /* CAN FD ASCII hex short representation with DATA_SEPERATORs */
 #define CL_CFSZ (2*CL_ID + 64*CL_DATA)
@@ -150,6 +151,7 @@ int parse_canframe(char *cs, struct canfd_frame *cf);
 
 void fprint_canframe(FILE *stream , struct canfd_frame *cf, char *eol, int sep, int maxdlen);
 void sprint_canframe(char *buf , struct canfd_frame *cf, int sep, int maxdlen);
+void sprint1_canframe(char *buf ,char *ID,char *DATA, struct canfd_frame *cf, int sep, int maxdlen);
 /*
  * Creates a CAN frame hexadecimal output in compact format.
  * The CAN data[] is separated by '.' when sep != 0.

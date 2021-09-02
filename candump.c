@@ -105,6 +105,7 @@ static char devname[MAXIFNAMES][IFNAMSIZ+1];
 static int  dindex[MAXIFNAMES];
 static int  max_devname_len; /* to prevent frazzled device name output */ 
 const int canfd_on = 1;
+long int timeStartLogging, startTime_sec,startTime_usec, startClock;
 
 static char fname[83] = { 0 }; /* suggested by -Wformat-overflow= */
 
@@ -224,7 +225,6 @@ int openlogfile(FILE **logfile) {
 		perror("time");
 		return 1;
 	}
-
 	localtime_r(&currtime, &now);
 
 	if (fname[0] == 0) {
@@ -240,7 +240,7 @@ int openlogfile(FILE **logfile) {
 		return 1;
 	}
 	*logfile = tmpfile;
-	fprintf(tmpfile, ";$FILEVERSION=2.0 \n;$STARTTIME= %d \n", now.tm_sec);
+	timeStartLogging = currtime;
 
 	return 0;
 }
@@ -802,14 +802,26 @@ int main(int argc, char **argv)
 
 				if (log) {
 					char buf[CL_CFSZ]; /* max length */
-					char line[50 + max_devname_len + 22];
-					
-
+					char canID[CL_ID];
+					char canDATA[64*CL_DATA + 7*CL_PROB];
+					char line[100 + max_devname_len + 22];
+					if (numberRow == 1){
+						startClock = tv.tv_usec + 1000000*tv.tv_sec;
+						startTime_sec = tv.tv_sec;
+						startTime_usec = tv.tv_usec;
+					}
+					long int sec,smsec,msec,usec,nowClock;
+					nowClock = tv.tv_usec + 1000000*tv.tv_sec - startClock;
+					msec = nowClock / 1000;
+					usec = nowClock - msec*1000;
+					// sec = tv.tv_sec - timeStartLogging;
+					// msec = tv.tv_usec /1000;
+					// smsec = msec + sec*1000;
+					// usec = tv.tv_usec - msec*1000;
 					/* log CAN frame with absolute timestamp & device */
-					sprint_canframe(buf, &frame, 0, maxdlen);
-					int n = sprintf(line, "%8d     (%010ld)     %s %s \n", numberRow, 
-						tv.tv_sec, 
-						devname[idx], buf);
+					sprint1_canframe(buf,canID,canDATA, &frame, 0, maxdlen);
+					int n = sprintf(line, "%7d  %8ld.%03ld DT %2d %8s RX  - %4d%s \n", numberRow, 
+						 msec,usec,idx, canID, frame.len, canDATA);
 						// sprintf(line, "%d \n",max_devname_len);
 					// int n = sprintf(line, "(%010ld.%06ld) %*s %s\n",
 					// 	tv.tv_sec, tv.tv_usec,
@@ -826,11 +838,14 @@ int main(int argc, char **argv)
 						char fullfname[sizeof(fname) + sizeof(postfix)];
 						sprintf(postfix, ".pt%u", part);
 						strcpy(fullfname, fname);
-						strcat(fullfname, postfix);
+						strcat(postfix, fullfname);
 						rename(fname, fullfname);
 						++part;
 						if (openlogfile(&logfile) != 0)
 							return 1;
+					}
+					if (numberRow == 1){
+						fprintf(logfile, ";$FILEVERSION = 2.1 \n;$STARTTIME = %010ld.%06ld \n;------------------------------------------------------------------------------- \n;   Message   Time    Type    ID     Rx/Tx \n;   Number    Offset  | Bus   [hex]  |  Reserved \n;   |         [ms]    |  |    |      |  |  Data Length Code \n;   |         |       |  |    |      |  |  |    Data [hex] ... \n;   |         |       |  |    |      |  |  |    | \n;---+-- ------+------ +- +- --+----- +- +- +--- +- -- -- -- -- -- -- -- \n" , startTime_sec , startTime_usec);
 					}
 					fprintf(logfile, "%s", line);
 					numberRow++;
@@ -838,6 +853,8 @@ int main(int argc, char **argv)
 
 				if ((logfrmt) && (silent == SILENT_OFF)){
 					char buf[CL_CFSZ]; /* max length */
+					char canID[CL_ID];
+					char canDATA[64*CL_DATA + 7*CL_PROB];
 
 					/* print CAN frame in log file style to stdout */
 					sprint_canframe(buf, &frame, 0, maxdlen);
