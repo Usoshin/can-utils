@@ -105,7 +105,7 @@ static char devname[MAXIFNAMES][IFNAMSIZ+1];
 static int  dindex[MAXIFNAMES];
 static int  max_devname_len; /* to prevent frazzled device name output */ 
 const int canfd_on = 1;
-long int timeStartLogging, startTime_sec[MAXSOCK],startTime_usec[MAXSOCK], startClock[MAXSOCK];
+long int timeStartLogging, startTime_sec[MAXSOCK],startTime_usec[MAXSOCK], startClock[MAXSOCK], startTime_secLog, startTime_usecLog, startClockLog;
 
 static char fname[83] = { 0 }; /* suggested by -Wformat-overflow= */
 static char fname1[MAXSOCK][83] = { 0 }; /* suggested by -Wformat-overflow= */
@@ -134,6 +134,7 @@ void print_usage(char *prg)
 	fprintf(stderr, "         -u <usecs>  (delay bridge forwarding by <usecs> microseconds)\n");
 	fprintf(stderr, "         -l          (log CAN-frames into file. Sets '-s %d' by default)\n", SILENT_ON);
 	fprintf(stderr, "         -m <size>   (log file max size - size examples: 1024, 1k, 100m, 1g)\n");
+	fprintf(stderr, "         -f          (log file split into some files with different buses)\n");
 	fprintf(stderr, "         -L          (use log file format on stdout)\n");
 	fprintf(stderr, "         -n <count>  (terminate after reception of <count> CAN frames)\n");
 	fprintf(stderr, "         -r <size>   (set socket receive buffer to <size>)\n");
@@ -218,22 +219,18 @@ int idx2dindex(int ifidx, int socket) {
 	return i;
 }
 
-int openlogfile(FILE **logfile) {
+int openlogfile(FILE **logfile, int part) {
 	time_t currtime;
 	struct tm now;
-	int i;
-	fprintf(stderr, "1 '%s'\n", fname);
 	if (time(&currtime) == (time_t)-1) {
 		perror("time");
 		return 1;
 	}
 	fname[0] = 0;
 	localtime_r(&currtime, &now);
-	fprintf(stderr, "2 '%d'\n", i);
-	i++;
 	if (fname[0] == 0) {
-		sprintf(fname, "candump-%04d-%02d-%02d_%02d%02d%02d.trc", now.tm_year + 1900,
-			now.tm_mon + 1, now.tm_mday, now.tm_hour, now.tm_min, now.tm_sec);
+		sprintf(fname, "candump-%04d-%02d-%02d_%02d%02d%02d Full Log part %d.trc", now.tm_year + 1900,
+			now.tm_mon + 1, now.tm_mday, now.tm_hour, now.tm_min, now.tm_sec, part);
 
 		fprintf(stderr, "Enabling Logfile '%s'\n", fname);
 	}
@@ -244,13 +241,11 @@ int openlogfile(FILE **logfile) {
 		return 1;
 	}
 	*logfile = tmpfile;
-	timeStartLogging = currtime;
-
 	return 0;
 }
 
 
-int openlogfile1(FILE **logfile , int i) {
+int openlogfile1(FILE **logfile , char* CANName ,unsigned int part, int i) {
 	time_t currtime;
 	struct tm now;
 	if (time(&currtime) == (time_t)-1) {
@@ -260,8 +255,8 @@ int openlogfile1(FILE **logfile , int i) {
 	fname1[i][0] = 0;
 	localtime_r(&currtime, &now);
 	if (fname1[i][0] == 0) {
-		sprintf(fname1[i], " %d candump-%04d-%02d-%02d_%02d%02d%02d.trc",i, now.tm_year + 1900,
-			now.tm_mon + 1, now.tm_mday, now.tm_hour, now.tm_min, now.tm_sec);
+		sprintf(fname1[i], "candump-%04d-%02d-%02d_%02d%02d%02d %s part%u.trc",now.tm_year + 1900,
+			now.tm_mon + 1, now.tm_mday, now.tm_hour, now.tm_min, now.tm_sec, CANName, part);
 
 		fprintf(stderr, "Enabling Logfile '%s'\n", fname1[i]);
 	}
@@ -314,10 +309,11 @@ int main(int argc, char **argv)
 	unsigned char color = 0;
 	unsigned char view = 0;
 	unsigned char log = 0;
+	unsigned char split = 0;
 	unsigned char logfrmt = 0;
 	unsigned long logmax = 0;
-	unsigned char part[MAXSOCK] = {0};
-	int numberRow[MAXSOCK];
+	unsigned char part[MAXSOCK] = {0}, partLog = 0;
+	int numberRow[MAXSOCK],numberRowLog = 1;
 	int count = 0;
 	int rcvbuf_size = 0;
 	int opt, ret;
@@ -346,7 +342,7 @@ int main(int argc, char **argv)
 	last_tv.tv_sec  = 0;
 	last_tv.tv_usec = 0;
 
-	while ((opt = getopt(argc, argv, "t:HciaSs:b:B:u:lm:DdxLn:r:heT:?")) != -1) {
+	while ((opt = getopt(argc, argv, "t:HciaSs:b:B:u:lfm:DdxLn:r:heT:?")) != -1) {
 		switch (opt) {
 		case 't':
 			timestamp = optarg[0];
@@ -442,6 +438,10 @@ int main(int argc, char **argv)
 
 		case 'm':
 			logmax = convertsize(optarg);
+			break;
+
+		case 'f':
+			split = 1;
 			break;
 
 		case 'D':
@@ -715,20 +715,9 @@ int main(int argc, char **argv)
 		{
 			numberRow[j] = 1;
 		}
-		// if (openlogfile(&logfile) != 0)
-		// 	return 1;
-		int i;
-		for (i=0;i<currmax;i++){
-	 		if (openlogfile1(&files[i], i) != 0)
-				return 1;
-			 	//fprintf(files[i], "%d",i);
-				//fclose(files[i]);
-				//printf("HELLOOOO%d",currmax);
-		}
 		if (silent != SILENT_ON)
 			fprintf(stderr, "Warning: Console output active while logging!\n");
 	}
-	// printf("HELLOOOO%d",currmax);
 
 	/* these settings are static and can be held out of the hot path */
 	iov.iov_base = &frame;
@@ -844,13 +833,51 @@ int main(int argc, char **argv)
 				if (frame.can_id & CAN_EFF_FLAG)
 					view |= CANLIB_VIEW_INDENT_SFF;
 
-				if (log) {
+				if (log == 1 && split != 1) {
+					char buf[CL_CFSZ]; /* max length */
+					char canID[CL_ID];
+					char canDATA[64*CL_DATA + 7*CL_PROB];
+					char line[100 + max_devname_len + 22];
+					char line1[100 + max_devname_len + 22];
+					if (numberRowLog == 1){
+						if (openlogfile(&logfile, partLog) != 0)
+							return 1;
+						startClockLog = tv.tv_usec + 1000000*tv.tv_sec;
+						startTime_secLog = tv.tv_sec;
+						startTime_usecLog = tv.tv_usec;
+					}
+					long unsigned int sec,smsec,msec,usec,nowClock;
+					nowClock = tv.tv_usec + 1000000*tv.tv_sec - startClockLog;
+					msec = nowClock / 1000;
+					usec = nowClock - msec*1000;
+					/* log CAN frame with absolute timestamp & device */
+					sprint1_canframe(buf,canID,canDATA, &frame, 0, maxdlen);
+					int n = sprintf(line, "%7d  %8ld.%03ld DT %2d %8s RX  - %4d%s \n", numberRowLog, 
+						 msec,usec,idx, canID, frame.len, canDATA);
+					if (logmax && ftell(logfile) + n > logmax) {
+						fclose(logfile);
+						numberRowLog = 1;
+						partLog++;
+						if (openlogfile(&logfile,partLog) != 0)
+							return 1;
+					}
+					n = sprintf(line1, "%7d  %8ld.%03ld DT %2d %8s RX  - %4d%s \n", numberRowLog, 
+						 msec,usec,idx, canID, frame.len, canDATA);
+					if (numberRowLog == 1){
+						fprintf(logfile, ";$FILEVERSION = 2.1 \n;$STARTTIME = %010ld.%06ld \n;------------------------------------------------------------------------------- \n;   Message   Time    Type    ID     Rx/Tx \n;   Number    Offset  | Bus   [hex]  |  Reserved \n;   |         [ms]    |  |    |      |  |  Data Length Code \n;   |         |       |  |    |      |  |  |    Data [hex] ... \n;   |         |       |  |    |      |  |  |    | \n;---+-- ------+------ +- +- --+----- +- +- +--- +- -- -- -- -- -- -- -- \n" , startTime_secLog , startTime_usecLog);
+					}
+					fprintf(logfile, "%s", line1);
+					numberRowLog++;
+				}
+				if (log == 1 && split == 1) {
 					char buf[CL_CFSZ]; /* max length */
 					char canID[CL_ID];
 					char canDATA[64*CL_DATA + 7*CL_PROB];
 					char line[100 + max_devname_len + 22];
 					char line1[100 + max_devname_len + 22];
 					if (numberRow[idx] == 1){
+						if (openlogfile1(&files[idx], devname[idx], part[idx], idx) != 0)
+							return 1;
 						startClock[idx] = tv.tv_usec + 1000000*tv.tv_sec;
 						startTime_sec[idx] = tv.tv_sec;
 						startTime_usec[idx] = tv.tv_usec;
@@ -859,40 +886,19 @@ int main(int argc, char **argv)
 					nowClock = tv.tv_usec + 1000000*tv.tv_sec - startClock[idx];
 					msec = nowClock / 1000;
 					usec = nowClock - msec*1000;
-					// sec = tv.tv_sec - timeStartLogging;
-					// msec = tv.tv_usec /1000;
-					// smsec = msec + sec*1000;
-					// usec = tv.tv_usec - msec*1000;
 					/* log CAN frame with absolute timestamp & device */
 					sprint1_canframe(buf,canID,canDATA, &frame, 0, maxdlen);
-					int n = sprintf(line, "%7d  %8ld.%03ld DT %2d %8s RX  - %4d%s \n", numberRow[idx], 
-						 msec,usec,idx, canID, frame.len, canDATA);
-						// sprintf(line, "%d \n",max_devname_len);
-					// int n = sprintf(line, "(%010ld.%06ld) %*s %s\n",
-					// 	tv.tv_sec, tv.tv_usec,
-					// 	max_devname_len, devname[idx], buf);
-					// int i;
-					// for (i = 0; i < MAXSOCK; i++)
-					// {
-					// 	printf(" Int: %s \n", devname[i]);
-					// }
+					int n = sprintf(line, "%7d  %8ld.%03ld DT %8s RX %-2d%s \n",numberRow[idx] ,msec ,usec ,canID ,frame.len ,canDATA );
 					if (logmax && ftell(files[idx]) + n > logmax) {
 						fclose(files[idx]);
 						numberRow[idx] = 1;
-						char postfix[7] = { 0 };
-						char fullfname[sizeof(fname1[idx]) + sizeof(postfix)];
-						sprintf(postfix, ".pt%u", part[idx]);
-						strcpy(fullfname, fname1[idx]);
-						strcat(fullfname, postfix);
-						rename(fname1[idx], fullfname);
 						part[idx]++;
-						if (openlogfile1(&files[idx],idx) != 0)
+						if (openlogfile1(&files[idx],devname[idx],part[idx],idx) != 0)
 							return 1;
 					}
-					n = sprintf(line1, "%7d  %8ld.%03ld DT %2d %8s RX  - %4d%s \n", numberRow[idx], 
-						 msec,usec,idx, canID, frame.len, canDATA);
+					n = sprintf(line1, "%7d  %8ld.%03ld DT %8s RX %-2d%s \n",numberRow[idx] ,msec ,usec ,canID ,frame.len ,canDATA );
 					if (numberRow[idx] == 1){
-						fprintf(files[idx], ";$FILEVERSION = 2.0 \n;$STARTTIME = %010ld.%06ld \n;------------------------------------------------------------------------------- \n;   Message   Time    Type    ID     Rx/Tx \n;   Number    Offset  | Bus   [hex]  |  Reserved \n;   |         [ms]    |  |    |      |  |  Data Length Code \n;   |         |       |  |    |      |  |  |    Data [hex] ... \n;   |         |       |  |    |      |  |  |    | \n;---+-- ------+------ +- +- --+----- +- +- +--- +- -- -- -- -- -- -- -- \n" , startTime_sec[idx] , startTime_usec[idx]);
+						fprintf(files[idx], ";$FILEVERSION = 2.0 \n;$STARTTIME = %010ld.%06ld \n;------------------------------------------------------------------------------- \n;   Message   Time    Type ID     Rx/Tx \n;   Number    Offset  |    [hex]  |  Data Length \n;   |         [ms]    |    |      |  |  Data [hex] ... \n;   |         |       |    |      |  |  | \n;---+-- ------+------ +- --+----- +- +- +- -- -- -- -- -- -- -- \n" , startTime_sec[idx] , startTime_usec[idx]);
 					}
 					fprintf(files[idx], "%s", line1);
 					numberRow[idx]++;
